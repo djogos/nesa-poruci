@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="theme-color" content="#BA7517" />
+<title>Pčelarska Radionica</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --amber: #BA7517;
+  --amber-hover: #8a5410;
+  --amber-light: #FAEEDA;
+  --amber-mid: #EF9F27;
+  --amber-dark: #633806;
+  --honey: #FAC775;
+  --bg: #ffffff;
+  --bg2: #f5f4f0;
+  --border: rgba(0,0,0,0.12);
+  --border2: rgba(0,0,0,0.22);
+  --text: #1a1a18;
+  --muted: #6b6a65;
+  --r: 14px;
+  --rm: 9px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b18;
+    --bg2: #26251f;
+    --border: rgba(255,255,255,0.12);
+    --border2: rgba(255,255,255,0.22);
+    --text: #f0efe8;
+    --muted: #9a9990;
+    --amber-light: #2a1f08;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+}
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg2); color: var(--text); }
+
+/* LAYOUT */
+#app { max-width: 540px; margin: 0 auto; min-height: 100vh; background: var(--bg); position: relative; }
+.screen { display: none; flex-direction: column; min-height: 100vh; }
+.screen.active { display: flex; }
+
+/* TOPBAR */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: var(--bg);
+  border-bottom: 0.5px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+.topbar-title { font-size: 16px; font-weight: 600; color: var(--text); }
+.topbar-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+/* BUTTONS */
+.btn {
+  border: 0.5px solid var(--border2); background: var(--bg);
+  border-radius: var(--rm); padding: 8px 14px; font-size: 14px; cursor: pointer;
+  color: var(--text); transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px;
+  font-family: inherit;
+}
+.btn:active { transform: scale(0.97); }
+.btn:hover { background: var(--bg2); }
+.btn-primary { background: var(--amber); border-color: var(--amber); color: #fff; font-weight: 600; }
+.btn-primary:hover { background: var(--amber-hover); border-color: var(--amber-hover); }
+.btn-ghost { border-color: transparent; background: transparent; }
+.btn-ghost:hover { background: var(--bg2); }
+.btn-danger { border-color: #E24B4A; color: #E24B4A; background: transparent; }
+.btn-danger:hover { background: #fcebeb; }
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+
+.btn-fab {
+  width: 56px; height: 56px; border-radius: 50%; background: var(--amber);
+  border: none; display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 26px; cursor: pointer;
+  box-shadow: 0 3px 12px rgba(186,117,23,0.45);
+  position: fixed; bottom: 28px; right: calc(50% - 270px + 20px);
+  z-index: 20; transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn-fab:hover { transform: scale(1.06); box-shadow: 0 5px 18px rgba(186,117,23,0.55); }
+.btn-fab:active { transform: scale(0.95); }
+@media (max-width: 540px) { .btn-fab { right: 20px; } }
+
+/* BADGE */
+.badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-nova { background: #E6F1FB; color: #185FA5; }
+.badge-utoku { background: #FAEEDA; color: #854F0B; }
+.badge-gotova { background: #EAF3DE; color: #3B6D11; }
+
+/* TABS */
+.tabs { display: flex; gap: 6px; padding: 12px 16px 6px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  padding: 6px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; font-weight: 500;
+  border: 0.5px solid var(--border); background: var(--bg); color: var(--muted);
+  white-space: nowrap; transition: all 0.15s; flex-shrink: 0;
+}
+.tab.active { background: var(--amber); border-color: var(--amber); color: #fff; }
+
+/* STATS */
+.stats-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 16px 0; }
+.stat-card { background: var(--bg2); border-radius: var(--rm); padding: 10px 12px; text-align: center; }
+.stat-num { font-size: 22px; font-weight: 700; }
+.stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.stat-nova .stat-num { color: #185FA5; }
+.stat-utoku .stat-num { color: #BA7517; }
+.stat-gotova .stat-num { color: #3B6D11; }
+
+/* TICKET LIST */
+.list { padding: 12px 16px 100px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.ticket-card {
+  background: var(--bg); border: 0.5px solid var(--border);
+  border-radius: var(--r); padding: 14px 16px; cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s; box-shadow: var(--shadow);
+}
+.ticket-card:active { border-color: var(--amber); box-shadow: 0 0 0 2px rgba(186,117,23,0.2); }
+.tc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
+.tc-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.tc-id { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.tc-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tc-items { font-size: 12px; color: var(--muted); flex: 1; }
+.tc-date { font-size: 11px; color: var(--muted); }
+
+/* FORM */
+.form-body { padding: 16px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; flex: 1; padding-bottom: 40px; }
+.form-group { display: flex; flex-direction: column; gap: 7px; }
+.form-label { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+input[type="text"], input[type="tel"], textarea, select {
+  border: 0.5px solid var(--border2); border-radius: var(--rm);
+  padding: 11px 13px; font-size: 15px; background: var(--bg); color: var(--text);
+  font-family: inherit; width: 100%; transition: border-color 0.15s;
+}
+input:focus, textarea:focus, select:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 3px rgba(186,117,23,0.12); }
+textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
+
+/* PRODUCT GRID */
+.product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prod-btn {
+  border: 0.5px solid var(--border); border-radius: var(--rm);
+  padding: 10px 10px; background: var(--bg); cursor: pointer;
+  display: flex; align-items: center; gap: 9px; transition: all 0.15s;
+  text-align: left;
+}
+.prod-btn.selected { border-color: var(--amber); background: var(--amber-light); }
+.prod-btn:active { transform: scale(0.97); }
+.prod-icon { font-size: 22px; flex-shrink: 0; }
+.prod-name { font-size: 13px; color: var(--text); font-weight: 600; line-height: 1.3; }
+.prod-cat { font-size: 11px; color: var(--muted); }
+
+/* QTY */
+.qty-row {
+  display: flex; align-items: center; justify-content: space-between;
+  border: 0.5px solid var(--border); border-radius: var(--rm); padding: 10px 14px; background: var(--bg);
+}
+.qty-name { font-size: 14px; font-weight: 500; }
+.qty-controls { display: flex; align-items: center; gap: 12px; }
+.qty-btn {
+  width: 32px; height: 32px; border-radius: 50%; border: 0.5px solid var(--border2);
+  background: var(--bg2); font-size: 20px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; color: var(--text);
+  transition: background 0.1s; line-height: 1;
+}
+.qty-btn:active { background: var(--amber-light); }
+.qty-num { font-size: 16px; font-weight: 600; min-width: 26px; text-align: center; }
+
+/* DETAIL */
+.detail-body { padding: 16px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; padding-bottom: 40px; }
+.section-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 10px; }
+.item-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 0; border-bottom: 0.5px solid var(--border);
+}
+.item-row:last-child { border-bottom: none; }
+.item-name { font-size: 14px; font-weight: 500; }
+.item-qty { font-size: 13px; color: var(--muted); font-weight: 600; }
+
+/* STATUS SELECTOR */
+.status-row { display: flex; gap: 8px; }
+.status-opt {
+  flex: 1; padding: 9px 6px; border: 0.5px solid var(--border); border-radius: var(--rm);
+  font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s;
+  color: var(--muted); background: var(--bg);
+}
+.status-opt:active { transform: scale(0.97); }
+.s-nova { border-color: #378ADD; background: #E6F1FB; color: #185FA5; }
+.s-utoku { border-color: #BA7517; background: #FAEEDA; color: #854F0B; }
+.s-gotova { border-color: #3B6D11; background: #EAF3DE; color: #3B6D11; }
+
+/* COMMENTS */
+.comment { display: flex; gap: 10px; }
+.comment-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--amber-light); display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--amber-dark); flex-shrink: 0;
+}
+.comment-bubble { background: var(--bg2); border-radius: 3px var(--rm) var(--rm) var(--rm); padding: 9px 13px; flex: 1; }
+.comment-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+.comment-text { font-size: 13px; line-height: 1.55; color: var(--text); }
+.comments-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.comment-input-row { display: flex; gap: 8px; align-items: flex-end; }
+.comment-input-row textarea { flex: 1; min-height: 44px; max-height: 120px; }
+
+/* EMPTY STATE */
+.empty { padding: 60px 16px; text-align: center; color: var(--muted); flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.empty-icon { font-size: 56px; margin-bottom: 14px; }
+.empty-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+.empty-sub { font-size: 13px; }
+
+/* DIVIDER */
+.divider { height: 0.5px; background: var(--border); }
+
+/* TOAST */
+.toast {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: #1a1a18; color: #fff; padding: 10px 20px; border-radius: 20px;
+  font-size: 13px; font-weight: 500; opacity: 0; transition: all 0.25s; z-index: 100;
+  pointer-events: none; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* LOADING */
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+
+/* INFO ROW */
+.info-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+.info-row:last-child { border-bottom: none; }
+.info-label { font-size: 13px; color: var(--muted); min-width: 80px; }
+.info-value { font-size: 14px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- === SCREEN: LIST === -->
+<div class="screen active" id="screen-list">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">🍯 Pčelarska radionica</div>
+      <div class="topbar-sub" id="topbar-date"></div>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="showScreen('screen-new')">
+      <i class="ti ti-plus" aria-hidden="true"></i> Nova
+    </button>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-card stat-nova"><div class="stat-num" id="stat-nova">0</div><div class="stat-lbl">Nova</div></div>
+    <div class="stat-card stat-utoku"><div class="stat-num" id="stat-utoku">0</div><div class="stat-lbl">U toku</div></div>
+    <div class="stat-card stat-gotova"><div class="stat-num" id="stat-gotova">0</div><div class="stat-lbl">Gotova</div></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-filter="sve" onclick="setFilter('sve',this)">Sve</div>
+    <div class="tab" data-filter="nova" onclick="setFilter('nova',this)">Nova</div>
+    <div class="tab" data-filter="u toku" onclick="setFilter('u toku',this)">U toku</div>
+    <div class="tab" data-filter="gotova" onclick="setFilter('gotova',this)">Gotova</div>
+  </div>
+
+  <div class="list" id="ticket-list">
+    <div class="loading">Učitavanje...</div>
+  </div>
+
+  <button class="btn-fab" onclick="showScreen('screen-new')" aria-label="Nova narudžbina">
+    <i class="ti ti-plus" aria-hidden="true"></i>
+  </button>
+</div>
+
+<!-- === SCREEN: NEW TICKET === -->
+<div class="screen" id="screen-new">
+  <div class="topbar">
+    <button class="btn btn-ghost" onclick="showScreen('screen-list')">
+      <i class="ti ti-arrow-left" aria-hidden="true"></i>
+    </button>
+    <div class="topbar-title">Nova narudžbina</div>
+    <button class="btn btn-primary btn-sm" onclick="saveTicket()" id="btn-save">
+      <i class="ti ti-check" aria-hidden="true"></i> Sačuvaj
+    </button>
+  </div>
+
+  <div class="form-body">
+    <div class="form-group">
+      <label class="form-label">Ime kupca *</label>
+      <input type="text" id="inp-name" placeholder="Npr. Marko Petrović" autocomplete="name" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Telefon</label>
+      <input type="tel" id="inp-phone" placeholder="+381 60 ..." autocomplete="tel" />
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Odaberi proizvode *</label>
+      <div class="product-grid" id="product-grid"></div>
+    </div>
+
+    <div id="qty-section" style="display:none">
+      <label class="form-label" style="display:block;margin-bottom:10px;">Količine</label>
+      <div id="qty-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Beleška</label>
+      <textarea id="inp-note" placeholder="Posebni zahtevi, rok isporuke, napomene..."></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- === SCREEN: DETAIL === -->
+<div class="screen" id="screen-detail">
+  <div class="topbar">
+    <button class="btn btn-ghost" onclick="showScreen('screen-list')">
+      <i class="ti ti-arrow-left" aria-hidden="true"></i>
+    </button>
+    <div>
+      <div class="topbar-title" id="d-title">—</div>
+      <div class="topbar-sub" id="d-sub">—</div>
+    </div>
+    <button class="btn btn-danger btn-sm" onclick="deleteTicket()">
+      <i class="ti ti-trash" aria-hidden="true"></i>
+    </button>
+  </div>
+
+  <div class="detail-body">
+
+    <div>
+      <div class="section-label">Status narudžbine</div>
+      <div class="status-row">
+        <div class="status-opt" id="s-nova" onclick="setStatus('nova')">Nova</div>
+        <div class="status-opt" id="s-utoku" onclick="setStatus('u toku')">U toku</div>
+        <div class="status-opt" id="s-gotova" onclick="setStatus('gotova')">Gotova</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Informacije</div>
+      <div id="d-info"></div>
+    </div>
+
+    <div>
+      <div class="section-label">Proizvodi</div>
+      <div id="d-items"></div>
+    </div>
+
+    <div id="d-note-block" style="display:none">
+      <div class="section-label">Beleška</div>
+      <div id="d-note" style="font-size:14px;line-height:1.65;color:var(--text);background:var(--bg2);padding:12px 14px;border-radius:var(--rm);"></div>
+    </div>
+
+    <div>
+      <div class="section-label">Komentari</div>
+      <div class="comments-list" id="d-comments"></div>
+      <div class="comment-input-row">
+        <textarea id="new-comment" placeholder="Dodaj komentar..."></textarea>
+        <button class="btn btn-primary" onclick="addComment()" style="padding:10px 13px;">
+          <i class="ti ti-send" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "/api";
+const PRODUCTS = [
+  {id:"p1",  name:"Košnica LR",      cat:"Oprema",   icon:"🏠"},
+  {id:"p2",  name:"Okviri za med",   cat:"Oprema",   icon:"🪵"},
+  {id:"p3",  name:"Vrcaljka",        cat:"Alati",    icon:"⚙️"},
+  {id:"p4",  name:"Zaštitni šešir",  cat:"Zaštita",  icon:"🪖"},
+  {id:"p5",  name:"Rukavice",        cat:"Zaštita",  icon:"🧤"},
+  {id:"p6",  name:"Dimilica",        cat:"Alati",    icon:"💨"},
+  {id:"p7",  name:"Matičnjaci",      cat:"Pčele",    icon:"👑"},
+  {id:"p8",  name:"Posuda za med",   cat:"Ambalaža", icon:"🫙"},
+  {id:"p9",  name:"Roj pčela",       cat:"Pčele",    icon:"🐝"},
+  {id:"p10", name:"Satni osnov",     cat:"Oprema",   icon:"🔶"},
+  {id:"p11", name:"Pčelarski kombinezon", cat:"Zaštita", icon:"👔"},
+  {id:"p12", name:"Postolje košnice",cat:"Oprema",   icon:"🪨"},
+];
+
+let tickets = [];
+let selectedProducts = {};
+let currentFilter = "sve";
+let currentId = null;
+
+// --- UTILS ---
+function fmtDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("sr-RS", {day:"2-digit", month:"2-digit", year:"numeric"}) +
+    " " + d.toLocaleTimeString("sr-RS", {hour:"2-digit", minute:"2-digit"});
+}
+function fmtShortDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString("sr-RS", {day:"2-digit", month:"2-digit"}) +
+    " " + d.toLocaleTimeString("sr-RS", {hour:"2-digit", minute:"2-digit"});
+}
+function showToast(msg, duration=2500) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), duration);
+}
+function statusBadge(s) {
+  const m = {nova:"badge-nova",  "u toku":"badge-utoku", gotova:"badge-gotova"};
+  const l = {nova:"Nova", "u toku":"U toku", gotova:"Gotova"};
+  return `<span class="badge ${m[s]||"badge-nova"}">${l[s]||s}</span>`;
+}
+
+// --- API CALLS ---
+async function apiFetch(path, opts={}) {
+  const res = await fetch(API + path, {
+    headers: {"Content-Type": "application/json"},
+    ...opts
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "Greška na serveru");
+  }
+  return res.json();
+}
+
+// --- SCREENS ---
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+  window.scrollTo(0, 0);
+  if (id === "screen-list") loadTickets();
+  if (id === "screen-new") initNewForm();
+}
+
+// --- LIST ---
+async function loadTickets() {
+  try {
+    tickets = await apiFetch("/tickets");
+    renderList();
+  } catch(e) {
+    document.getElementById("ticket-list").innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">Greška</div><div class="empty-sub">${e.message}</div></div>`;
+  }
+}
+
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  el.classList.add("active");
+  renderList();
+}
+
+function renderList() {
+  const nova = tickets.filter(t => t.status === "nova").length;
+  const utoku = tickets.filter(t => t.status === "u toku").length;
+  const gotova = tickets.filter(t => t.status === "gotova").length;
+  document.getElementById("stat-nova").textContent = nova;
+  document.getElementById("stat-utoku").textContent = utoku;
+  document.getElementById("stat-gotova").textContent = gotova;
+
+  const filtered = currentFilter === "sve" ? tickets : tickets.filter(t => t.status === currentFilter);
+  const el = document.getElementById("ticket-list");
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty">
+      <div class="empty-icon">📭</div>
+      <div class="empty-title">Nema narudžbina</div>
+      <div class="empty-sub">Dodaj prvu narudžbinu dugmetom +</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(t => {
+    const itemStr = t.items.map(i => `${i.name} ×${i.qty}`).join(", ");
+    const short = itemStr.length > 55 ? itemStr.slice(0, 55) + "…" : itemStr;
+    return `<div class="ticket-card" onclick="openTicket('${t.id}')">
+      <div class="tc-header">
+        <div>
+          <div class="tc-name">${esc(t.customerName)}</div>
+          <div class="tc-id">#${t.id}${t.phone ? " · " + esc(t.phone) : ""}</div>
+        </div>
+        ${statusBadge(t.status)}
+      </div>
+      <div class="tc-meta">
+        <span class="tc-items"><i class="ti ti-package" style="font-size:12px;vertical-align:-1px;margin-right:3px" aria-hidden="true"></i>${esc(short)}</span>
+        <span class="tc-date">${fmtShortDate(t.createdAt)}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// --- NEW TICKET ---
+function initNewForm() {
+  selectedProducts = {};
+  ["inp-name","inp-phone","inp-note"].forEach(id => document.getElementById(id).value = "");
+  renderProductGrid();
+  updateQtySection();
+}
+
+function renderProductGrid() {
+  document.getElementById("product-grid").innerHTML = PRODUCTS.map(p => `
+    <button class="prod-btn ${selectedProducts[p.id] ? "selected" : ""}" onclick="toggleProduct('${p.id}')">
+      <span class="prod-icon">${p.icon}</span>
+      <div><div class="prod-name">${esc(p.name)}</div><div class="prod-cat">${p.cat}</div></div>
+    </button>`).join("");
+}
+
+function toggleProduct(pid) {
+  if (selectedProducts[pid]) { delete selectedProducts[pid]; }
+  else { selectedProducts[pid] = 1; }
+  renderProductGrid();
+  updateQtySection();
+}
+
+function updateQtySection() {
+  const sel = Object.keys(selectedProducts);
+  const sec = document.getElementById("qty-section");
+  if (!sel.length) { sec.style.display = "none"; return; }
+  sec.style.display = "block";
+  document.getElementById("qty-list").innerHTML = sel.map(pid => {
+    const p = PRODUCTS.find(x => x.id === pid);
+    return `<div class="qty-row">
+      <span class="qty-name">${p.icon} ${esc(p.name)}</span>
+      <div class="qty-controls">
+        <button class="qty-btn" onclick="changeQty('${pid}',-1)">−</button>
+        <span class="qty-num" id="qty-${pid}">${selectedProducts[pid]}</span>
+        <button class="qty-btn" onclick="changeQty('${pid}',1)">+</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function changeQty(pid, delta) {
+  selectedProducts[pid] = Math.max(1, (selectedProducts[pid] || 1) + delta);
+  const el = document.getElementById("qty-" + pid);
+  if (el) el.textContent = selectedProducts[pid];
+}
+
+async function saveTicket() {
+  const name = document.getElementById("inp-name").value.trim();
+  if (!name) { showToast("⚠️ Unesite ime kupca"); return; }
+  const sel = Object.keys(selectedProducts);
+  if (!sel.length) { showToast("⚠️ Odaberite bar jedan proizvod"); return; }
+
+  const btn = document.getElementById("btn-save");
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2" aria-hidden="true"></i> Čuvam...';
+
+  try {
+    const ticket = await apiFetch("/tickets", {
+      method: "POST",
+      body: JSON.stringify({
+        customerName: name,
+        phone: document.getElementById("inp-phone").value.trim(),
+        items: sel.map(pid => {
+          const p = PRODUCTS.find(x => x.id === pid);
+          return { id: pid, name: p.name, icon: p.icon, qty: selectedProducts[pid] };
+        }),
+        note: document.getElementById("inp-note").value.trim(),
+      })
+    });
+    showToast("✅ Narudžbina #" + ticket.id + " sačuvana");
+    showScreen("screen-list");
+  } catch(e) {
+    showToast("❌ " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-check"></i> Sačuvaj';
+  }
+}
+
+// --- DETAIL ---
+async function openTicket(id) {
+  currentId = id;
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  renderDetail(t);
+  showScreen("screen-detail");
+
+  // Refresh from server in background
+  try {
+    const fresh = await apiFetch("/tickets/" + id);
+    const idx = tickets.findIndex(x => x.id === id);
+    if (idx !== -1) tickets[idx] = fresh;
+    renderDetail(fresh);
+  } catch(_) {}
+}
+
+function renderDetail(t) {
+  document.getElementById("d-title").textContent = t.customerName;
+  document.getElementById("d-sub").textContent = "#" + t.id + " · " + fmtShortDate(t.createdAt);
+
+  // Status buttons
+  ["nova","utoku","gotova"].forEach(s => {
+    const el = document.getElementById("s-" + s);
+    el.className = "status-opt";
+  });
+  const statusKey = t.status === "u toku" ? "utoku" : t.status;
+  const el = document.getElementById("s-" + statusKey);
+  if (el) el.classList.add("s-" + statusKey);
+
+  // Info
+  document.getElementById("d-info").innerHTML = [
+    t.phone ? `<div class="info-row"><span class="info-label"><i class="ti ti-phone" aria-hidden="true"></i> Telefon</span><span class="info-value">${esc(t.phone)}</span></div>` : "",
+    `<div class="info-row"><span class="info-label"><i class="ti ti-calendar" aria-hidden="true"></i> Datum</span><span class="info-value">${fmtDate(t.createdAt)}</span></div>`,
+  ].join("");
+
+  // Items
+  document.getElementById("d-items").innerHTML = t.items.map(i =>
+    `<div class="item-row">
+      <span class="item-name">${i.icon || ""} ${esc(i.name)}</span>
+      <span class="item-qty">×${i.qty}</span>
+    </div>`
+  ).join("");
+
+  // Note
+  const nb = document.getElementById("d-note-block");
+  if (t.note) {
+    nb.style.display = "block";
+    document.getElementById("d-note").textContent = t.note;
+  } else { nb.style.display = "none"; }
+
+  renderComments(t.comments || []);
+}
+
+function renderComments(comments) {
+  const el = document.getElementById("d-comments");
+  if (!comments.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:4px 0 8px;">Nema komentara još uvek.</div>`;
+    return;
+  }
+  el.innerHTML = comments.map(c => `
+    <div class="comment">
+      <div class="comment-avatar">${esc(c.initials || "R")}</div>
+      <div class="comment-bubble">
+        <div class="comment-meta">${esc(c.author)} · ${fmtDate(c.ts)}</div>
+        <div class="comment-text">${esc(c.text)}</div>
+      </div>
+    </div>`).join("");
+}
+
+async function setStatus(newStatus) {
+  try {
+    const t = await apiFetch("/tickets/" + currentId, {
+      method: "PATCH",
+      body: JSON.stringify({ status: newStatus })
+    });
+    const idx = tickets.findIndex(x => x.id === currentId);
+    if (idx !== -1) tickets[idx] = t;
+    renderDetail(t);
+    showToast("Status: " + newStatus);
+  } catch(e) { showToast("❌ " + e.message); }
+}
+
+async function addComment() {
+  const txt = document.getElementById("new-comment").value.trim();
+  if (!txt) return;
+  try {
+    await apiFetch("/tickets/" + currentId + "/comments", {
+      method: "POST",
+      body: JSON.stringify({ text: txt, author: "Radionica" })
+    });
+    document.getElementById("new-comment").value = "";
+    // Refresh
+    const t = await apiFetch("/tickets/" + currentId);
+    const idx = tickets.findIndex(x => x.id === currentId);
+    if (idx !== -1) tickets[idx] = t;
+    renderComments(t.comments || []);
+  } catch(e) { showToast("❌ " + e.message); }
+}
+
+async function deleteTicket() {
+  if (!confirm("Obrisati ovu narudžbinu?")) return;
+  try {
+    await apiFetch("/tickets/" + currentId, { method: "DELETE" });
+    tickets = tickets.filter(t => t.id !== currentId);
+    showToast("🗑️ Narudžbina obrisana");
+    showScreen("screen-list");
+  } catch(e) { showToast("❌ " + e.message); }
+}
+
+// --- HELPERS ---
+function esc(s) {
+  return String(s || "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+}
+
+// --- INIT ---
+document.getElementById("topbar-date").textContent = new Date().toLocaleDateString("sr-RS",{weekday:"long",day:"numeric",month:"long"});
+loadTickets();
+</script>
+</body>
+</html>
