@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
 import json
 import os
@@ -7,7 +7,7 @@ from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = Flask(__name__, static_folder="static", static_url_path="")
+app = Flask(__name__)
 CORS(app)
 
 DATA_FILE = os.environ.get("DATA_FILE", os.path.join(BASE_DIR, "data.json"))
@@ -32,30 +32,19 @@ def gen_id():
 # --- SERVE FRONTEND ---
 @app.route("/")
 def index():
-    # Try static/index.html first, then root
-    static_path = os.path.join(BASE_DIR, "static", "index.html")
-    root_path = os.path.join(BASE_DIR, "index.html")
-    if os.path.exists(static_path):
-        return send_from_directory(os.path.join(BASE_DIR, "static"), "index.html")
-    elif os.path.exists(root_path):
-        return send_from_directory(BASE_DIR, "index.html")
-    else:
-        return jsonify({
-            "error": "index.html not found",
-            "base_dir": BASE_DIR,
-            "files": os.listdir(BASE_DIR)
-        }), 404
+    return render_template("index.html")
 
 
-# --- DEBUG ROUTE (obrisi posle) ---
+# --- DEBUG ROUTE ---
 @app.route("/debug")
 def debug():
     static_dir = os.path.join(BASE_DIR, "static")
+    templates_dir = os.path.join(BASE_DIR, "templates")
     return jsonify({
         "base_dir": BASE_DIR,
         "base_files": os.listdir(BASE_DIR),
-        "static_exists": os.path.exists(static_dir),
         "static_files": os.listdir(static_dir) if os.path.exists(static_dir) else [],
+        "templates_files": os.listdir(templates_dir) if os.path.exists(templates_dir) else [],
     })
 
 
