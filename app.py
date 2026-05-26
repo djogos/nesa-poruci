@@ -4,6 +4,12 @@ import json
 import os
 import uuid
 from datetime import datetime
+from pymongo import MongoClient
+
+MONGO_URI = os.environ.get("MONGO_URI")
+client = MongoClient(MONGO_URI)
+db = client["nesa"]  # Ime baze podataka
+tickets_collection = db["orders"]
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -14,16 +20,16 @@ DATA_FILE = os.environ.get("DATA_FILE", os.path.join(BASE_DIR, "data.json"))
 
 
 def load_data():
-    if not os.path.exists(DATA_FILE):
-        return {"tickets": []}
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    # MongoDB vraća podatke, mi ih pakujemo u format koji tvoj frontend već očekuje
+    # Sortiramo ih tako da najnovije porudžbine budu na vrhu
+    cursor = tickets_collection.find({}, {"_id": 0}).sort("createdAt", -1)
+    return {"tickets": list(cursor)}
 
 
 def save_data(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
+    # Pošto MongoDB radi sa pojedinačnim unosima, ova funkcija nam tehnički više ne treba za dodavanje,
+    # ali je zadržavamo praznu da ti ne bismo kvarili ostatak koda ako se negde poziva.
+    pass
 
 def gen_id():
     return "T" + str(uuid.uuid4())[:5].upper()
@@ -73,16 +79,19 @@ def create_ticket():
         "createdAt": datetime.utcnow().isoformat() + "Z",
         "comments": [],
     }
-    data = load_data()
-    data["tickets"].insert(0, ticket)
-    save_data(data)
+    
+    # DIREKTNO upisujemo u MongoDB
+    tickets_collection.insert_one(ticket)
+    
+    # Sklanjamo MongoDB interni ID pre slanja frontendu
+    ticket.pop("_id", None)
     return jsonify(ticket), 201
 
 
 @app.route("/api/tickets/<ticket_id>", methods=["GET"])
 def get_ticket(ticket_id):
-    data = load_data()
-    t = next((t for t in data["tickets"] if t["id"] == ticket_id), None)
+    # Tražimo tiket po ID-ju
+    t = tickets_collection.find_one({"id": ticket_id}, {"_id": 0})
     if not t:
         return jsonify({"error": "Tiket nije pronađen"}), 404
     return jsonify(t)
@@ -91,30 +100,33 @@ def get_ticket(ticket_id):
 @app.route("/api/tickets/<ticket_id>", methods=["PATCH"])
 def update_ticket(ticket_id):
     body = request.get_json()
-    data = load_data()
-    t = next((t for t in data["tickets"] if t["id"] == ticket_id), None)
-    if not t:
-        return jsonify({"error": "Tiket nije pronađen"}), 404
-
+    
     allowed = {"status", "note", "customerName", "phone", "items"}
-    for k, v in body.items():
-        if k in allowed:
-            t[k] = v
+    update_fields = {k: v for k, v in body.items() if k in allowed}
+    
+    if not update_fields:
+        return jsonify({"error": "Nema validnih polja za izmenu"}), 400
 
-    save_data(data)
-    return jsonify(t)
+    # Menjamo samo poslata polja u bazi
+    result = tickets_collection.find_one_and_update(
+        {"id": ticket_id},
+        {"$set": update_fields},
+        {"_id": 0},
+        return_document=True # Vraća izmenjen objekat
+    )
+    
+    if not result:
+        return jsonify({"error": "Tiket nije pronađen"}), 404
+        
+    return jsonify(result)
 
 
 @app.route("/api/tickets/<ticket_id>", methods=["DELETE"])
 def delete_ticket(ticket_id):
-    data = load_data()
-    before = len(data["tickets"])
-    data["tickets"] = [t for t in data["tickets"] if t["id"] != ticket_id]
-    if len(data["tickets"]) == before:
+    result = tickets_collection.delete_one({"id": ticket_id})
+    if result.deleted_count == 0:
         return jsonify({"error": "Tiket nije pronađen"}), 404
-    save_data(data)
     return jsonify({"ok": True})
-
 
 # --- COMMENTS ---
 @app.route("/api/tickets/<ticket_id>/comments", methods=["POST"])
@@ -122,11 +134,6 @@ def add_comment(ticket_id):
     body = request.get_json()
     if not body.get("text", "").strip():
         return jsonify({"error": "Komentar ne može biti prazan"}), 400
-
-    data = load_data()
-    t = next((t for t in data["tickets"] if t["id"] == ticket_id), None)
-    if not t:
-        return jsonify({"error": "Tiket nije pronađen"}), 404
 
     author = body.get("author", "Radionica")
     comment = {
@@ -136,8 +143,16 @@ def add_comment(ticket_id):
         "text": body["text"].strip(),
         "ts": datetime.utcnow().isoformat() + "Z",
     }
-    t["comments"].append(comment)
-    save_data(data)
+    
+    # Direktno guramo (push) komentar u niz "comments" unutar tog tiketa
+    result = tickets_collection.update_one(
+        {"id": ticket_id},
+        {"$push": {"comments": comment}}
+    )
+    
+    if result.matched_count == 0:
+        return jsonify({"error": "Tiket nije pronađen"}), 404
+        
     return jsonify(comment), 201
 
 
