@@ -5,12 +5,10 @@ import os
 import uuid
 from datetime import datetime
 from pymongo import MongoClient
+import certifi
 
 MONGO_URI = os.environ.get("MONGO_URI")
-client = MongoClient(
-    MONGO_URI,
-    serverSelectionTimeoutMS=10000
-)
+client = MongoClient(os.environ["MONGO_URI"], tlsCAFile=certifi.where())
 db = client["nesa"]  # Ime baze podataka
 tickets_collection = db["orders"]
 
