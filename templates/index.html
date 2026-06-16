@@ -419,6 +419,76 @@ textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
 .pack-progress-fill { height: 100%; background: #3B6D11; border-radius: 2px; transition: width 0.3s ease; }
 .pack-progress-label { font-size: 11px; color: var(--muted); margin-top: 3px; }
 
+
+/* ── EXPANDED SELECTED PROD ROW (mobile-friendly) ── */
+.prod-row-expanded {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 10px !important;
+  cursor: default !important;
+  padding: 12px !important;
+}
+.prod-row-top {
+  display: flex; align-items: center; gap: 10px;
+}
+.prod-deselect-btn {
+  width: 28px; height: 28px; border-radius: 50%; border: 0.5px solid var(--border2);
+  background: var(--bg); cursor: pointer; color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; transition: color 0.1s, background 0.1s;
+  margin-left: auto;
+}
+.prod-deselect-btn:hover { color: #E24B4A; background: #fcebeb; }
+
+.prod-row-controls {
+  display: flex; flex-direction: column; gap: 8px;
+  padding-top: 8px; border-top: 0.5px solid rgba(186,117,23,0.25);
+}
+.prod-ctrl-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  align-items: end;
+}
+.prod-ctrl-block {
+  display: flex; flex-direction: column; gap: 5px;
+}
+.prod-ctrl-label {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.price-input-full {
+  width: 100%; font-size: 14px; font-weight: 600;
+  color: var(--amber-dark); border: 0.5px solid var(--border2);
+  border-radius: var(--rm); padding: 7px 10px; background: var(--bg);
+  font-family: inherit;
+  -moz-appearance: textfield;
+}
+.price-input-full::-webkit-outer-spin-button,
+.price-input-full::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.price-input-full:focus { outline: none; border-color: var(--amber); }
+
+/* variant-row: label + select side-by-side */
+.variant-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.variant-label {
+  font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap;
+}
+.variant-select-sm {
+  flex: 1; font-size: 13px; padding: 6px 8px; margin-top: 0;
+  border: 0.5px solid var(--border2); border-radius: var(--rm);
+  background: var(--bg); color: var(--text);
+  font-family: inherit; cursor: pointer;
+}
+.variant-select-sm:focus { outline: none; border-color: var(--amber); }
+
+/* qty-input-sm inside expanded row */
+.prod-row-expanded .qty-input-sm {
+  width: 52px; padding: 6px 4px; font-size: 14px;
+}
+.prod-row-expanded .qty-btn-sm {
+  width: 32px; height: 32px; font-size: 20px;
+}
+
 </style>
 </head>
 <body>
@@ -643,25 +713,50 @@ function getVariantMap() {
  * Given a parent woo_id and a variant selection dict {attrName: value},
  * find the matching child variant and return its price (snizena_cena || cena).
  * Returns null if no match found.
+ *
+ * IMPORTANT: For child variant products, each attribute has exactly ONE value
+ * in vrednosti (the specific value for that child). We compare only that first
+ * value, NOT using .includes() which would match parent's full value list.
  */
 function lookupVariantPrice(parentWooId, variant) {
   if (!variant || !Object.keys(variant).length) return null;
   const map = getVariantMap();
   const children = map[parentWooId] || [];
   for (const child of children) {
-    // child.atributi: [ { ime, vrednosti: [string] } ]
-    // For a variant child, each attribute has exactly 1 value
     if (!child.atributi || !child.atributi.length) continue;
     const matches = child.atributi.every(attr => {
       const selected = variant[attr.ime];
       if (!selected) return false;
-      return attr.vrednosti && attr.vrednosti.includes(selected);
+      // Use ONLY the first value — child variants store exactly one value per attr
+      const childVal = attr.vrednosti && attr.vrednosti[0];
+      return childVal === selected;
     });
     if (matches) {
       return child.snizena_cena || child.cena || null;
     }
   }
   return null;
+}
+
+/**
+ * Get the deduplicated list of values for each attribute across all children
+ * of a parent product. Used to build the dropdown options.
+ */
+function getVariantAttrOptions(parentWooId, atributi) {
+  const map = getVariantMap();
+  const children = map[parentWooId] || [];
+  if (!children.length) return null; // use parent's atributi.vrednosti as-is
+  // Build per-attr value sets from actual children
+  const optMap = {};
+  for (const child of children) {
+    if (!child.atributi) continue;
+    for (const attr of child.atributi) {
+      if (!optMap[attr.ime]) optMap[attr.ime] = [];
+      const v = attr.vrednosti && attr.vrednosti[0];
+      if (v && !optMap[attr.ime].includes(v)) optMap[attr.ime].push(v);
+    }
+  }
+  return optMap;
 } // indices of packed items in current detail view
 
 // ===== UTILS =====
@@ -959,16 +1054,25 @@ function buildProdRow(p, catName, showCat) {
   // ── Variant selects (atributi) ──
   let variantHtml = "";
   if (sel && p.atributi && p.atributi.length) {
+    // Get actual values from child variants (deduped, correct count)
+    const attrOpts = getVariantAttrOptions(p.woo_id, p.atributi);
     p.atributi.forEach(attr => {
       if (!attr.vrednosti || !attr.vrednosti.length) return;
-      const curVal = (sel.variant && sel.variant[attr.ime]) || attr.vrednosti[0];
-      const opts = attr.vrednosti.map(v =>
+      // Use child-derived options if available, else fall back to parent's vrednosti
+      const values = (attrOpts && attrOpts[attr.ime] && attrOpts[attr.ime].length)
+        ? attrOpts[attr.ime]
+        : attr.vrednosti;
+      const curVal = (sel.variant && sel.variant[attr.ime]) || values[0];
+      const opts = values.map(v =>
         `<option value="${esc(v)}" ${v===curVal?"selected":""}>${esc(v)}</option>`
       ).join("");
-      variantHtml += `<select class="variant-select-sm" onclick="event.stopPropagation()"
-        onchange="setProdVariant(${p.woo_id},'${esc(attr.ime)}',this.value)">
-        ${opts}
-      </select>`;
+      variantHtml += `<div class="variant-row" onclick="event.stopPropagation()">
+        <span class="variant-label">${esc(attr.ime)}:</span>
+        <select class="variant-select-sm"
+          onchange="setProdVariant(${p.woo_id},'${esc(attr.ime)}',this.value)">
+          ${opts}
+        </select>
+      </div>`;
     });
   }
 
@@ -985,18 +1089,63 @@ function buildProdRow(p, catName, showCat) {
        </div>`
     : (basePrice > 0 ? `<div class="prod-row-price" style="color:var(--amber-dark);font-weight:600;">${fmtPrice(basePrice)}</div>` : "");
 
-  return `<div class="prod-row ${sel?'selected':''}" onclick="toggleProd(${p.woo_id})">
-    <img class="prod-thumb" src="${prodImgUrl(p)}" alt="${esc(p.naziv)}"
-      onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-    <div class="prod-thumb-placeholder" style="display:none;">${catIcon(catName)}</div>
-    <div class="prod-info">
-      <div class="prod-row-name">${esc(p.naziv)}</div>
-      ${priceEditHtml}
-      ${variantHtml}
-      ${p.sku ? `<div class="prod-row-sku">SKU: ${esc(p.sku)}</div>` : ""}
-      ${showCat ? `<span class="prod-row-cat">${esc(catName)}</span>` : ""}
+  if (!sel) {
+    // ── Unselected: compact horizontal row ──
+    return `<div class="prod-row" onclick="toggleProd(${p.woo_id})">
+      <img class="prod-thumb" src="${prodImgUrl(p)}" alt="${esc(p.naziv)}"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+      <div class="prod-thumb-placeholder" style="display:none;">${catIcon(catName)}</div>
+      <div class="prod-info">
+        <div class="prod-row-name">${esc(p.naziv)}</div>
+        ${basePrice > 0 ? `<div class="prod-row-price" style="color:var(--amber-dark);font-weight:600;">${fmtPrice(basePrice)}</div>` : ""}
+        ${p.sku ? `<div class="prod-row-sku">SKU: ${esc(p.sku)}</div>` : ""}
+        ${showCat ? `<span class="prod-row-cat">${esc(catName)}</span>` : ""}
+      </div>
+      <button class="prod-add-btn" onclick="event.stopPropagation();toggleProd(${p.woo_id})" title="Dodaj">
+        <i class="ti ti-plus"></i>
+      </button>
+    </div>`;
+  }
+
+  // ── Selected: expanded vertical card ──
+  return `<div class="prod-row prod-row-expanded selected" onclick="event.stopPropagation()">
+    <!-- top: image + name + deselect -->
+    <div class="prod-row-top">
+      <img class="prod-thumb" src="${prodImgUrl(p)}" alt="${esc(p.naziv)}"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+      <div class="prod-thumb-placeholder" style="display:none;">${catIcon(catName)}</div>
+      <div class="prod-info">
+        <div class="prod-row-name">${esc(p.naziv)}</div>
+        ${p.sku ? `<div class="prod-row-sku">SKU: ${esc(p.sku)}</div>` : ""}
+        ${showCat ? `<span class="prod-row-cat">${esc(catName)}</span>` : ""}
+      </div>
+      <button class="prod-deselect-btn" onclick="toggleProd(${p.woo_id})" title="Ukloni">
+        <i class="ti ti-x" style="font-size:14px;"></i>
+      </button>
     </div>
-    ${qtyControl}
+    <!-- bottom controls -->
+    <div class="prod-row-controls">
+      ${variantHtml ? `<div class="prod-ctrl-block">${variantHtml}</div>` : ""}
+      <div class="prod-ctrl-row">
+        <div class="prod-ctrl-block">
+          <span class="prod-ctrl-label">Količina</span>
+          <div class="prod-qty-inline">
+            <button class="qty-btn-sm" onclick="changeProdQty(${p.woo_id},-1)">−</button>
+            <input class="qty-input-sm" type="number" min="0.1" step="0.1"
+              value="${sel.qty}"
+              onchange="setProdQtyDirect(${p.woo_id}, this.value)" />
+            <button class="qty-btn-sm" onclick="changeProdQty(${p.woo_id},1)">+</button>
+          </div>
+        </div>
+        <div class="prod-ctrl-block">
+          <span class="prod-ctrl-label">Cena (din)</span>
+          <input class="price-input-full" type="number" min="0" step="1"
+            value="${displayPrice || ''}"
+            placeholder="${basePrice || '0'}"
+            onchange="setProdCustomPrice(${p.woo_id}, this.value)" />
+        </div>
+      </div>
+    </div>
   </div>`;
 }
 
