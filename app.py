@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template, session, redirect, url_for
 from flask_cors import CORS
 import json
 import os
@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 from pymongo import MongoClient
 import certifi
+from functools import wraps
 
 MONGO_URI = os.environ.get("MONGO_URI")
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
@@ -16,7 +17,22 @@ products_collection = db["products"]
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "promeni-ovo-u-produkciji")
 CORS(app)
+
+LOGIN_USERNAME = os.environ.get("LOGIN_USERNAME", "admin")
+LOGIN_PASSWORD = os.environ.get("LOGIN_PASSWORD", "admin")
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            if request.is_json:
+                return jsonify({"error": "Nije autorizovano"}), 401
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
 
 
 def load_data():
@@ -32,14 +48,34 @@ def gen_id():
     return "T" + str(uuid.uuid4())[:5].upper()
 
 
+# --- AUTH ---
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        if (request.form.get("username") == LOGIN_USERNAME and
+                request.form.get("password") == LOGIN_PASSWORD):
+            session["logged_in"] = True
+            return redirect(url_for("index"))
+        return render_template("login.html", error="Pogrešno korisničko ime ili lozinka")
+    return render_template("login.html", error=None)
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 # --- SERVE FRONTEND ---
 @app.route("/")
+@login_required
 def index():
     return render_template("index.html")
 
 
 # --- DEBUG ROUTE ---
 @app.route("/debug")
+@login_required
 def debug():
     static_dir = os.path.join(BASE_DIR, "static")
     templates_dir = os.path.join(BASE_DIR, "templates")
@@ -59,6 +95,7 @@ def debug():
 
 # --- PRODUCTS ---
 @app.route("/api/products", methods=["GET"])
+@login_required
 def get_products():
     """
     Returns all products that are in_stock, sorted by category then name.
@@ -74,6 +111,7 @@ def get_products():
 
 # --- PRODUCT VARIANTS (children) ---
 @app.route("/api/products/variants", methods=["GET"])
+@login_required
 def get_variants():
     """
     Returns all child variant products (roditelj_id != None).
@@ -87,12 +125,14 @@ def get_variants():
 
 # --- TICKETS ---
 @app.route("/api/tickets", methods=["GET"])
+@login_required
 def get_tickets():
     data = load_data()
     return jsonify(data["tickets"])
 
 
 @app.route("/api/tickets", methods=["POST"])
+@login_required
 def create_ticket():
     body = request.get_json()
     if not body.get("customerName"):
@@ -121,6 +161,7 @@ def create_ticket():
 
 
 @app.route("/api/tickets/<ticket_id>", methods=["GET"])
+@login_required
 def get_ticket(ticket_id):
     t = tickets_collection.find_one({"id": ticket_id}, {"_id": 0})
     if not t:
@@ -129,6 +170,7 @@ def get_ticket(ticket_id):
 
 
 @app.route("/api/tickets/<ticket_id>", methods=["PATCH"])
+@login_required
 def update_ticket(ticket_id):
     body = request.get_json()
     allowed = {"status", "note", "customerName", "phone", "items", "address", "apt", "city", "total"}
@@ -148,6 +190,7 @@ def update_ticket(ticket_id):
 
 
 @app.route("/api/tickets/<ticket_id>/packed", methods=["PUT"])
+@login_required
 def set_packed(ticket_id):
     """Store which item indices are packed. Body: { "packed": [0, 2, 3] }"""
     body = request.get_json()
@@ -168,6 +211,7 @@ def set_packed(ticket_id):
 
 
 @app.route("/api/tickets/<ticket_id>", methods=["DELETE"])
+@login_required
 def delete_ticket(ticket_id):
     result = tickets_collection.delete_one({"id": ticket_id})
     if result.deleted_count == 0:
@@ -177,6 +221,7 @@ def delete_ticket(ticket_id):
 
 # --- COMMENTS ---
 @app.route("/api/tickets/<ticket_id>/comments", methods=["POST"])
+@login_required
 def add_comment(ticket_id):
     body = request.get_json()
     if not body.get("text", "").strip():
