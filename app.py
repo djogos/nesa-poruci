@@ -7,8 +7,7 @@ from datetime import datetime
 from pymongo import MongoClient
 import certifi
 
-# MONGO_URI = os.environ.get("MONGO_URI")
-MONGO_URI = "mongodb+srv://djjevremovic_db_user:2oBhEZwpKOmFTl5l@cluster0.ykevmuk.mongodb.net/?appName=Cluster0"
+MONGO_URI = os.environ.get("MONGO_URI")
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client["nesa"]
 tickets_collection = db["orders"]
