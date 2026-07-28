@@ -509,7 +509,7 @@ textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
       <div class="topbar-title">🍯 Pčelarska radionica</div>
       <div class="topbar-sub" id="topbar-date"></div>
     </div>
-    <button class="btn btn-primary btn-sm" onclick="showScreen('screen-new')">
+    <button class="btn btn-primary btn-sm" onclick="openNewTicketForm()">
       <i class="ti ti-plus" aria-hidden="true"></i> Nova
     </button>
   </div>
@@ -525,7 +525,7 @@ textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
     <div class="tab" data-filter="gotova" onclick="setFilter('gotova',this)">Gotova</div>
   </div>
   <div class="list" id="ticket-list"><div class="loading">Učitavanje...</div></div>
-  <button class="btn-fab" onclick="showScreen('screen-new')" aria-label="Nova narudžbina">
+  <button class="btn-fab" onclick="openNewTicketForm()" aria-label="Nova narudžbina">
     <i class="ti ti-plus" aria-hidden="true"></i>
   </button>
 </div>
@@ -533,10 +533,10 @@ textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
 <!-- === SCREEN: NEW TICKET === -->
 <div class="screen" id="screen-new">
   <div class="topbar">
-    <button class="btn btn-ghost" onclick="showScreen('screen-list')">
+    <button class="btn btn-ghost" onclick="backFromForm()">
       <i class="ti ti-arrow-left" aria-hidden="true"></i>
     </button>
-    <div class="topbar-title">Nova narudžbina</div>
+    <div class="topbar-title" id="form-title">Nova narudžbina</div>
     <!-- spacer so title stays centered -->
     <div style="width:70px"></div>
   </div>
@@ -643,9 +643,14 @@ textarea { min-height: 80px; resize: vertical; line-height: 1.5; }
       <div class="topbar-title" id="d-title">—</div>
       <div class="topbar-sub" id="d-sub">—</div>
     </div>
-    <button class="btn btn-danger btn-sm" onclick="deleteTicket()">
-      <i class="ti ti-trash" aria-hidden="true"></i>
-    </button>
+    <div style="display:flex;gap:6px;">
+      <button class="btn btn-ghost btn-sm" onclick="openEditTicket(currentId)" title="Izmeni narudžbinu">
+        <i class="ti ti-edit" aria-hidden="true"></i>
+      </button>
+      <button class="btn btn-danger btn-sm" onclick="deleteTicket()" title="Obriši narudžbinu">
+        <i class="ti ti-trash" aria-hidden="true"></i>
+      </button>
+    </div>
   </div>
   <div class="detail-body">
     <div>
@@ -700,6 +705,8 @@ let globalSearchQuery = "";
 let selOverlayOpen = false;
 let packedItems = new Set(); // indices of packed items in current detail view
 let allVariants = [];        // child variant products from /api/products/variants
+let formMode = "create";     // "create" | "edit" — mode of screen-new form
+let editingTicketId = null;  // id of ticket being edited (formMode === "edit")
 
 // Build lookup: roditelj_id -> [ variant, ... ]
 function buildVariantMap() {
@@ -1393,7 +1400,56 @@ function addCustomProduct() {
   document.getElementById("custom-naziv").focus();
 }
 
-// ===== NEW TICKET FORM =====
+// ===== NEW / EDIT TICKET FORM =====
+function openNewTicketForm() {
+  formMode = "create";
+  editingTicketId = null;
+  showScreen("screen-new");
+}
+
+function openEditTicket(id) {
+  if (!id) return;
+  formMode = "edit";
+  editingTicketId = id;
+  showScreen("screen-new");
+}
+
+function backFromForm() {
+  if (formMode === "edit" && editingTicketId) {
+    formMode = "create";
+    showScreen("screen-detail");
+  } else {
+    showScreen("screen-list");
+  }
+}
+
+// Rebuild the selectedProducts map from an existing ticket's items (used when editing)
+function buildSelectedFromItems(items) {
+  const map = {};
+  (items || []).forEach(it => {
+    if (it.isCustom || !it.woo_id) {
+      customCounter++;
+      const key = "custom_" + customCounter;
+      map[key] = {
+        product: { naziv: it.naziv, isCustom: true, cena: it.cena || 0, woo_id: null },
+        qty: it.qty,
+        variant: it.variant || {},
+        customPrice: (it.customPrice !== null && it.customPrice !== undefined) ? it.customPrice : (it.finalPrice || 0),
+      };
+    } else {
+      const p = allProducts.find(x => x.woo_id === it.woo_id);
+      const product = p || { naziv: it.naziv, woo_id: it.woo_id, cena: it.cena || 0, sku: it.sku || "", kategorije: [] };
+      map[it.woo_id] = {
+        product,
+        qty: it.qty,
+        variant: it.variant || {},
+        customPrice: (it.customPrice !== null && it.customPrice !== undefined) ? it.customPrice : null,
+      };
+    }
+  });
+  return map;
+}
+
 async function initNewForm() {
   selectedProducts = {};
   customCounter = 0;
@@ -1414,6 +1470,15 @@ async function initNewForm() {
   document.getElementById("sel-overlay-total").textContent = "";
   document.getElementById("sel-overlay-list").innerHTML = "";
 
+  // Title & save button label depend on mode
+  const titleEl = document.getElementById("form-title");
+  const saveBtn = document.getElementById("btn-save");
+  const isEdit = formMode === "edit" && editingTicketId;
+  if (titleEl) titleEl.textContent = isEdit ? "Izmena narudžbine" : "Nova narudžbina";
+  if (saveBtn) saveBtn.innerHTML = isEdit
+    ? '<i class="ti ti-check"></i> Sačuvaj izmene'
+    : '<i class="ti ti-check"></i> Sačuvaj narudžbinu';
+
   if (!allProducts.length) {
     document.getElementById("product-browser").innerHTML =
       `<div class="loading" style="padding:20px 0;">Učitavanje proizvoda...</div>`;
@@ -1430,7 +1495,25 @@ async function initNewForm() {
       return;
     }
   }
+
+  if (isEdit) {
+    let t = tickets.find(x => x.id === editingTicketId);
+    if (!t) { try { t = await apiFetch("/tickets/" + editingTicketId); } catch(e) { t = null; } }
+    if (t) {
+      document.getElementById("inp-name").value = t.customerName || "";
+      document.getElementById("inp-phone").value = t.phone || "";
+      document.getElementById("inp-address").value = t.address || "";
+      document.getElementById("inp-apt").value = t.apt || "";
+      document.getElementById("inp-city").value = t.city || "";
+      document.getElementById("inp-note").value = t.note || "";
+      selectedProducts = buildSelectedFromItems(t.items || []);
+    } else {
+      showToast("⚠️ Narudžbina nije pronađena");
+    }
+  }
+
   renderProductBrowser();
+  updateSelOverlay();
 }
 
 async function saveTicket() {
@@ -1439,43 +1522,69 @@ async function saveTicket() {
   const sel = Object.keys(selectedProducts);
   if (!sel.length) { showToast("⚠️ Odaberite bar jedan proizvod"); return; }
 
+  const isEdit = formMode === "edit" && editingTicketId;
   const btn = document.getElementById("btn-save");
   btn.disabled = true;
   btn.innerHTML = '<i class="ti ti-loader-2"></i> Čuvam...';
 
+  const payload = {
+    customerName: name,
+    phone:   document.getElementById("inp-phone").value.trim(),
+    address: document.getElementById("inp-address").value.trim(),
+    apt:     document.getElementById("inp-apt").value.trim(),
+    city:    document.getElementById("inp-city").value.trim(),
+    items: sel.map(wid => {
+      const entry = selectedProducts[wid];
+      const {product, qty, variant, customPrice} = entry;
+      const finalPrice = effectivePrice(entry);
+      return {
+        woo_id: product.woo_id || null,
+        naziv: product.naziv,
+        sku: product.sku || "",
+        qty,
+        cena: product.cena || 0,
+        customPrice: customPrice,
+        finalPrice,
+        variant: variant || null,
+        isCustom: product.isCustom || false,
+      };
+    }),
+    total: sel.reduce((s,wid) => s + effectivePrice(selectedProducts[wid]) * selectedProducts[wid].qty, 0),
+    note: document.getElementById("inp-note").value.trim(),
+  };
+
   try {
-    const ticket = await apiFetch("/tickets", {
-      method: "POST",
-      body: JSON.stringify({
-        customerName: name,
-        phone:   document.getElementById("inp-phone").value.trim(),
-        address: document.getElementById("inp-address").value.trim(),
-        apt:     document.getElementById("inp-apt").value.trim(),
-        city:    document.getElementById("inp-city").value.trim(),
-        items: sel.map(wid => {
-          const entry = selectedProducts[wid];
-          const {product, qty, variant, customPrice} = entry;
-          const finalPrice = effectivePrice(entry);
-          return {
-            woo_id: product.woo_id || null,
-            naziv: product.naziv,
-            sku: product.sku || "",
-            qty,
-            cena: product.cena || 0,
-            customPrice: customPrice,
-            finalPrice,
-            variant: variant || null,
-            isCustom: product.isCustom || false,
-          };
-        }),
-        total: sel.reduce((s,wid) => s + effectivePrice(selectedProducts[wid]) * selectedProducts[wid].qty, 0),
-        note: document.getElementById("inp-note").value.trim(),
-      })
-    });
-    showToast("✅ Narudžbina #" + ticket.id + " sačuvana");
-    showScreen("screen-list");
+    if (isEdit) {
+      const t = await apiFetch("/tickets/" + editingTicketId, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      // Items may have changed — reset packed/spakovano progress to avoid stale indices
+      packedItems = new Set();
+      t.packed_items = [];
+      apiFetch("/tickets/" + editingTicketId + "/packed", {
+        method: "PUT", body: JSON.stringify({ packed: [] }),
+      }).catch(()=>{});
+
+      const idx = tickets.findIndex(x => x.id === editingTicketId);
+      if (idx !== -1) tickets[idx] = t; else tickets.unshift(t);
+      showToast("✅ Narudžbina #" + t.id + " izmenjena");
+      currentId = t.id;
+      formMode = "create"; editingTicketId = null;
+      renderDetail(t);
+      showScreen("screen-detail");
+    } else {
+      const ticket = await apiFetch("/tickets", { method: "POST", body: JSON.stringify(payload) });
+      showToast("✅ Narudžbina #" + ticket.id + " sačuvana");
+      showScreen("screen-list");
+    }
   } catch(e) { showToast("❌ " + e.message); }
-  finally { btn.disabled=false; btn.innerHTML='<i class="ti ti-check"></i> Sačuvaj narudžbinu'; }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = isEdit
+      ? '<i class="ti ti-check"></i> Sačuvaj izmene'
+      : '<i class="ti ti-check"></i> Sačuvaj narudžbinu';
+  }
 }
 
 // ===== DETAIL =====
@@ -1514,7 +1623,7 @@ function renderDetail(t) {
 
   const addrParts = [t.address, t.apt?`br. ${t.apt}`:"", t.city].filter(Boolean).join(", ");
   document.getElementById("d-info").innerHTML = [
-    t.phone ? `<div class="info-row"><span class="info-label"><i class="ti ti-phone"></i> Telefon</span><span class="info-value">${esc(t.phone)}</span></div>` : "",
+    `<div class="info-row"><span class="info-label"><i class="ti ti-phone"></i> Telefon</span><span class="info-value">${t.phone ? `<a href="tel:${esc(t.phone)}" style="color:inherit;text-decoration:none;">${esc(t.phone)}</a>` : '<span style="color:var(--muted);font-weight:400;">Nije unet</span>'}</span></div>`,
     addrParts ? `<div class="info-row"><span class="info-label"><i class="ti ti-map-pin"></i> Adresa</span><span class="info-value">${esc(addrParts)}</span></div>` : "",
     `<div class="info-row"><span class="info-label"><i class="ti ti-calendar"></i> Datum</span><span class="info-value">${fmtDate(t.createdAt)}</span></div>`,
   ].join("");
